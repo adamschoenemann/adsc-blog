@@ -14,5 +14,8 @@ First, we must define a simple language to work with
 
 \begin{code}
 newtype Ident = { unIdent :: String }
-data Expr = Var Ident | Lam Ident Type Expr | App Expr Expr
+data Expr  
+  = Var Ident -- ^ x
+  | Lam Ident Type Expr -- λ(x: A). e 
+  | App Expr Expr -- e1 e2
 \end{code}
