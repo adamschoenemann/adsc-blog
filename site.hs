@@ -8,6 +8,7 @@ import           Text.Pandoc.Options
 
 --------------------------------------------------------------------------------
 
+-- | Not used by an example of how to customize the compiler
 customPandocCompiler :: Compiler (Item String)
 customPandocCompiler =
     let 
@@ -17,6 +18,15 @@ customPandocCompiler =
                           readerExtensions = newExtensions
                         }
     in pandocCompilerWith readerOptions defaultHakyllWriterOptions 
+
+myFeedConfiguration :: FeedConfiguration
+myFeedConfiguration = FeedConfiguration
+    { feedTitle = "Adam Schønemann"
+    , feedDescription = "A feed of blog posts from Adam Schønemann"
+    , feedAuthorName = "Adam Schønemann"
+    , feedAuthorEmail = "adamschoenemann@gmail.com"
+    , feedRoot = "http://adamschoenemann.dk"
+    }
     
 
 main :: IO ()
@@ -39,23 +49,30 @@ main = hakyll $ do
         route $ setExtension "html"
         compile $ pandocCompiler
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
+            >>= saveSnapshot "content"
             >>= loadAndApplyTemplate "templates/default.html" postCtx
             >>= relativizeUrls
 
-    create ["archive.html"] $ do
+    create ["blog.html"] $ do
         route idRoute
         compile $ do
             posts <- recentFirst =<< loadAll "posts/*"
             let archiveCtx =
                     listField "posts" postCtx (return posts) `mappend`
-                    constField "title" "Archives"            `mappend`
+                    constField "title" "Blog"            `mappend`
                     defaultContext
 
             makeItem ""
-                >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
+                >>= loadAndApplyTemplate "templates/blog.html" archiveCtx
                 >>= loadAndApplyTemplate "templates/default.html" archiveCtx
                 >>= relativizeUrls
-
+    
+    create ["rss.xml"] $ do
+        route idRoute
+        compile $ do
+            let feedCtx = postCtx `mappend` bodyField "description" 
+            posts <- fmap (take 10) . recentFirst =<< loadAllSnapshots "posts/*" "content"
+            renderRss myFeedConfiguration feedCtx posts
 
     match "index.html" $ do
         route idRoute

@@ -1,17 +1,19 @@
 ---
 title: About
 ---
-Nullam imperdiet sodales orci vitae molestie. Nunc quam orci, pharetra a
-rhoncus vitae, eleifend id felis. Suspendisse potenti. Etiam vitae urna orci.
-Quisque pellentesque dignissim felis, egestas tempus urna luctus vitae. In hac
-habitasse platea dictumst. Morbi fringilla mattis odio, et mattis tellus
-accumsan vitae.
+.. image:: images/adam_portrait_new.jpg
+    :class: rounded-circle
+    
+I am a software developer from Copenhagen specializing in functional programming. My main language of choice
+is Haskell because its strong static type-system and lazy semantics provides a strong foundation to write safe,
+correct and compositional software
 
-1. Amamus Unicode 碁
-2. Interdum nex magna.
+I have a Master's degree in Software Development and Technology from the IT University of Copenhagen.
+You can `find my thesis here<https://lybaek.adamschoenemann.dk/f/af8692d18b944ba5ab2d/?dl=1>`_.
 
-Vivamus eget mauris sit amet nulla laoreet lobortis. Nulla in diam elementum
-risus convallis commodo. Cras vehicula varius dui vitae facilisis. Proin
-elementum libero eget leo aliquet quis euismod orci vestibulum. Duis rhoncus
-lorem consequat tellus vestibulum aliquam. Quisque orci orci, malesuada porta
-blandit et, interdum nec magna.
+You can send me a mail at ``adamschoenemann`` at gmail, and also find me 
+on `GitHub<https://github.com/adamschoenemann>`_ and 
+`LinkedIn<https://www.linkedin.com/in/adamschoenemann/>`_.
+
+Aside from programming I listen to a lot of music, mostly metal. I also am an 
+avid drummer, primarily in the band `ORM<https://www.facebook.com/ormband/>`_.
