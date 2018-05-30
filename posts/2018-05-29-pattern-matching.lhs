@@ -17,7 +17,7 @@ To kick things off, the obligatory language extensions and some imports
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-import Control.Monad.Except (ExceptT, runExceptT, MonadError)
+import Control.Monad.Except (ExceptT, runExceptT, MonadError, throwError)
 
 \end{code}
 First, we must define a simple language to work with
@@ -39,27 +39,31 @@ type UserPattern = Pattern Name
 type UniqueIdent = Integer
 type IdealPattern = Pattern UniqueIdent
 
-class Coverage ident m where
-  getType :: ident -> m Type
-  getConstructors :: Type -> m [Pattern ident]
-
-data Branch = Branch { usages :: Integer, pattern :: UserPattern }
-
-checkCoverage 
-  :: (Coverage UniqueIdent m, Applicative m, MonadError CoverageError m)
-  => IdealPattern -> [UserPattern] -> m ()
-checkCoverage ideal userpats = (ideal `coveredBy` (map asBranch userpats)) >> pure () where
-  asBranch pat = Branch { usages = 0, pattern = pat }
-
 data CoverageError
   = RedundantBranch UserPattern
   | CannotCover IdealPattern
   deriving (Show, Eq)
 
+class (Monad m, MonadError CoverageError m) => Coverage ident m where
+  getType :: ident -> m Type
+  getConstructors :: Type -> m [Pattern ident]
+
+data Branch = Branch { usages :: Integer, pattern :: UserPattern }
+
+newtype Subst = Subst { unSubst :: [(UniqueIdent, UserPattern)] }
+
+checkCoverage 
+  :: (MonadError CoverageError m)
+  => IdealPattern -> [UserPattern] -> m ()
+checkCoverage ideal userpats = (ideal `coveredBy` (map asBranch userpats)) >> pure () where
+  asBranch pat = Branch { usages = 0, pattern = pat }
+
 coveredBy 
-  :: (Coverage UniqueIdent m, MonadError CoverageError m)
+  :: (MonadError CoverageError m)
   => IdealPattern -> [Branch] -> m [Branch]
-coveredBy ideal branches = undefined
+coveredBy ideal [] = throwError (CannotCover ideal)
+coveredBy ideal (branch:branches) = undefined
+
   
 
 

@@ -8,7 +8,7 @@ I am a software developer from Copenhagen specializing in functional programming
 is Haskell because its strong static type-system and lazy semantics provides a strong foundation to write safe,
 correct and compositional software
 
-I have a Master's degree in Software Development and Technology from the IT University of Copenhagen.
+I have a Master\'s degree in Software Development and Technology from the IT University of Copenhagen.
 You can `find my thesis here<https://lybaek.adamschoenemann.dk/f/af8692d18b944ba5ab2d/?dl=1>`_.
 
 You can send me a mail at ``adamschoenemann`` at gmail, and also find me 
