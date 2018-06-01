@@ -1,16 +1,82 @@
 ---
 title: Pattern matching ADTs
 ---
-Pattern matching on generalized algebraic datatypes is a complicated problem, and 
+This post is about implementing coverage checking of pattern matches in Haskell.
+It does not involve any super-advanced type-level trickery, so if you're comfortable
+reading just-above-basic Haskell you should be fine.
+
+Introduction
+------------
+Pattern matching coverage on generalized algebraic datatypes is a complicated problem, and 
 has seen many attempts at a solution in recent years. Pattern matching 
 on ordinary ADTs is often simply mentioned as a trivial matter and delegated to 
 a footnoote. When I recently had to implement a coverage checking algorithm in a 
 Haskell-like language *without* GADTs, I found that there was a dearth of 
 information (which was not paywalled) on how to go about such a problem. 
+Specifically, I needed to disallow not only non-exhaustive matches but also
+redundant matches.
+Eventually, I devised a solution that is a small modification of a well-known algorithm.
+I don\'t expect that there is anything academically novel about my modification,
+but I do wish that I hadn\'t spent so much time searching in vain for a ready-made solution.
 This blog post is my attempt at rectifying this state of affairs for those that 
 come after me!
 
-To kick things off, the obligatory language extensions and some imports
+When dealing with pattern matching clauses, we can typically encounter two kinds
+of problems:
+
+- The clauses are non-exhaustive; for example
+  ``` haskell
+  case xs of
+    [] -> ...
+  ```
+  In this example, we have clearly not dealt with the case where `xs` is a cons
+  constructed list. If we accept such a match we can introduce divergence
+  into our language very easily.
+- There are one or more redundant clauses; for example
+  ``` haskell
+  case xs of
+    [] -> ...
+    (x : xs') -> ...
+    xs' -> ...
+  ```
+  In this example, the last branch is essentially dead code, as it will never
+  be reached.
+
+The only information I could find on the internet on coverage checking was Conor McBride\'s
+[great StackOverflow answer][1] which explains the core idea behind Lennart Augustsson\'s 
+technique for compiling pattern matches. I also found a kindred spirit in 
+Tim Humphries who had encountered the same lack of information and devised
+[an algorithm using tries][2].
+
+The problem was that I could not get McBride\'s explanation to account for
+*redundant pattern matches*. McBride explains how to use the algorithm to flag
+*overlapping patterns*, but this is too strong a requirement. For example,
+``` haskell
+case xs of
+  [] -> ...
+  xs' -> ...
+```
+would be flagged as an issue, since `xs'` strictly overlaps with `[]`. But this
+is rarely what we want since we often use catch-all patterns for convenience.
+
+While I only took a cursory look at Tim Humphries' implementation, 
+it did not appear to make any attempt at checking anything beyond exhaustivity,
+so I could not steal his code shamelessly either.
+
+After pouring over McBride's explanation for many hours, I eventually discovered
+how to modify it to suit my needs by introducing just a tiny bit of extra state.
+
+The algorithm
+-------------
+Disclaimer: just be absolutely clear, this algorithm is mostly due to
+[Augustsson][3] and just a small extension of the outline provided by [Conor
+McBride\'s StackOverflow answer][1]. I don\'t pretend to have invented anything
+novel.
+
+With that out of the way, let us start directly modeling our problem in Haskell.
+
+Since this is a literate Haskell file, we\'ll kick things off with some obligatory
+language extensions and imports.
 
 \begin{code}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -25,6 +91,29 @@ import Control.Monad.Reader (Reader, runReader, MonadReader, asks, local)
 import Data.Foldable (foldlM)
 import Control.Monad (replicateM)
 import Data.Maybe (catMaybes)
+\end{code}
+
+
+
+
+
+here is a sketch of how the algorithm works.
+
+The problem is to check if an *ideal pattern* $q$ is covered by a set of
+pattern-matching clauses $ρ$. If there is a substitution of variables $υ$ in $q$ 
+such that $υ q$ ($υ$ applied to $q$) equals $ρ_1$ then we can say that $ρ_1$
+is an *instance* of $q$. If, furthermore, the substitution $υ$ is an *injective renaming
+of variables*, then we know that 
+
+
+
+Implementation
+--------------
+
+To kick things off, the obligatory language extensions and some imports
+
+
+\begin{code}
 -- import Debug.Trace
 
 trace _ x = x
@@ -61,12 +150,6 @@ data CoverageError
 
 data Constructor = Constructor Name [Type]
 
-class (Monad m, MonadState CoverageState m, MonadError CoverageError m) 
-  => Coverage m where
-      getType :: UniqueIdent -> m Type
-      getConstructors :: Type -> m [Constructor]
-      withTypes :: [(UniqueIdent, Type)] -> m a -> m a
-
 data CoverageRead = CoverageRead 
   { crTypes :: [(UniqueIdent, Type)]
   , crConstructors :: [(Type, [Constructor])]
@@ -80,7 +163,7 @@ newtype CoverageM r = CoverageM
           CoverageError 
           (StateT CoverageState (Reader CoverageRead)) r 
   }
-  deriving (Functor
+  deriving ( Functor
            , Applicative
            , Monad
            , MonadError CoverageError
@@ -96,16 +179,19 @@ runCoverageM
 runCoverageM st rd (CoverageM x) = 
   runReader (runStateT (runExceptT x) st) rd
 
-instance Coverage CoverageM where
-  getType uid = 
-    asks crTypes
-    >>= maybe (throwError $ NoTypeFound uid) pure . lookup uid
 
-  getConstructors typ = 
-    asks crConstructors
-    >>= maybe (throwError $ NoConstructorsFound typ) pure . lookup typ
-  
-  withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
+getType :: UniqueIdent -> CoverageM Type
+getType uid = 
+  asks crTypes
+  >>= maybe (throwError $ NoTypeFound uid) pure . lookup uid
+
+getConstructors :: Type -> CoverageM [Constructor]
+getConstructors typ = 
+  asks crConstructors
+  >>= maybe (throwError $ NoConstructorsFound typ) pure . lookup typ
+
+withTypes :: [(UniqueIdent, Type)] -> CoverageM a -> CoverageM a
+withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
 
 constructorToPattern :: MonadState UniqueIdent m => Constructor -> m (IdealPattern, [(UniqueIdent, Type)])
 constructorToPattern (Constructor nm args) = do
@@ -158,7 +244,7 @@ isInjective (Subst ((b,p):xs)) =
 
 checkCoverage 
   :: Coverage m
-  => IdealPattern -> [UserPattern] -> m ()
+  => IdealPattern -> [UserPattern] -> CoverageM ()
 checkCoverage ideal userpats = do
   checkedBranches <- (ideal `coveredBy` (map asBranch userpats)) 
   let unreached = unusedPatterns checkedBranches
@@ -259,3 +345,7 @@ test = do
     (|->) x y = (x,y)
 
 \end{code}
+
+[1]: https://stackoverflow.com/questions/7883023/algorithm-for-type-checking-ml-like-pattern-matching
+[2]: https://teh.id.au/posts/2017/03/10/simple-exhaustivity/index.html
+[3]: https://dl.acm.org/citation.cfm?id=5303
