@@ -150,6 +150,12 @@ data CoverageError
 
 data Constructor = Constructor Name [Type]
 
+class (Monad m, MonadState CoverageState m, MonadError CoverageError m) 
+  => Coverage m where
+      getType :: UniqueIdent -> m Type
+      getConstructors :: Type -> m [Constructor]
+      withTypes :: [(UniqueIdent, Type)] -> m a -> m a
+
 data CoverageRead = CoverageRead 
   { crTypes :: [(UniqueIdent, Type)]
   , crConstructors :: [(Type, [Constructor])]
@@ -178,20 +184,18 @@ runCoverageM
   -> (Either CoverageError a, CoverageState)
 runCoverageM st rd (CoverageM x) = 
   runReader (runStateT (runExceptT x) st) rd
+  
+instance Coverage CoverageM where
+  getType uid = 
+    asks crTypes
+    >>= maybe (throwError $ NoTypeFound uid) pure . lookup uid
 
+  getConstructors typ = 
+    asks crConstructors
+    >>= maybe (throwError $ NoConstructorsFound typ) pure . lookup typ
+  
+  withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
 
-getType :: UniqueIdent -> CoverageM Type
-getType uid = 
-  asks crTypes
-  >>= maybe (throwError $ NoTypeFound uid) pure . lookup uid
-
-getConstructors :: Type -> CoverageM [Constructor]
-getConstructors typ = 
-  asks crConstructors
-  >>= maybe (throwError $ NoConstructorsFound typ) pure . lookup typ
-
-withTypes :: [(UniqueIdent, Type)] -> CoverageM a -> CoverageM a
-withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
 
 constructorToPattern :: MonadState UniqueIdent m => Constructor -> m (IdealPattern, [(UniqueIdent, Type)])
 constructorToPattern (Constructor nm args) = do
@@ -244,7 +248,7 @@ isInjective (Subst ((b,p):xs)) =
 
 checkCoverage 
   :: Coverage m
-  => IdealPattern -> [UserPattern] -> CoverageM ()
+  => IdealPattern -> [UserPattern] -> m ()
 checkCoverage ideal userpats = do
   checkedBranches <- (ideal `coveredBy` (map asBranch userpats)) 
   let unreached = unusedPatterns checkedBranches
