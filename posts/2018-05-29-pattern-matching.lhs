@@ -93,47 +93,48 @@ import Control.Monad (replicateM)
 import Data.Maybe (catMaybes)
 \end{code}
 
+None of these extensions or imports should worry you right now.
 
-
-
-
-here is a sketch of how the algorithm works.
-
-The problem is to check if an *ideal pattern* $q$ is covered by a set of
-pattern-matching clauses $ρ$. If there is a substitution of variables $υ$ in $q$ 
-such that $υ q$ ($υ$ applied to $q$) equals $ρ_1$ then we can say that $ρ_1$
-is an *instance* of $q$. If, furthermore, the substitution $υ$ is an *injective renaming
-of variables*, then we know that 
-
-
-
-Implementation
---------------
-
-To kick things off, the obligatory language extensions and some imports
-
+We need to define the language of types and patterns we\'ll be working on. Lets keep
+it simple.
 
 \begin{code}
--- import Debug.Trace
 
-trace _ x = x
-traceM _ = pure ()
-
-\end{code}
-First, we must define a simple language to work with
-
-\begin{code}
 type Name = String
 data Type 
   = TConstr Name
-  | TUnit 
-  | TInt
   deriving (Eq, Show)
 
 data Pattern ident
   = PBind ident
   | PMatch Name [Pattern ident]
   deriving (Eq, Show)
+\end{code}
+
+Types are just an open set of nullary type constructors. So for example `Unit` or `Boolean`
+or `IntList`. Our language does not have polymorphism, but the algorithm will work
+fine with a bit of extra machinery for polymorphic types as well ([proof][Coverage.hs]).
+
+Patterns are slightly more complicated. A pattern can *bind* a value or it can *match*
+(destructure) a value. As an example, the clauses
+```haskell
+xs -> ...
+Cons x xs' -> ...
+```
+would be encoded as
+```haskell
+[ PBind "xs"
+, PMatch "Cons" [PBind "x", PBind "xs'"]
+]
+```
+We\'ll refrain from use infix pattern-operators like `(:)` and instead use their
+"ordinary" names just to simplify our implementation and presentation.
+
+You\'ll notice that `Pattern` is parameterized over `ident`. We use this to 
+later distinguish patterns with user-given "string" names and machine-generated 
+"fresh" names.
+
+\begin{code}
 
 type UserPattern = Pattern Name
 type UniqueIdent = Integer
@@ -269,17 +270,17 @@ coveredBy ideal [] = throwError (CannotCover ideal)
 coveredBy ideal (branch : branches) = 
   hasSubst ideal (pattern branch) >>= \case
     Nothing -> do
-      traceM (show ideal ++ " not covered by " ++ show (pattern branch))
+      -- traceM (show ideal ++ " not covered by " ++ show (pattern branch))
       (branch :) <$> coveredBy ideal branches
 
     Just subst ->
       case isInjective subst of
         Injective -> do
-          traceM (show ideal ++ " covered by " ++ show (pattern branch)) 
+          -- traceM (show ideal ++ " covered by " ++ show (pattern branch)) 
           pure (useBranch branch : branches)
 
         NotInjective ident -> do
-          traceM $ "not injective: " ++ show subst
+          -- traceM $ "not injective: " ++ show subst
           typ <- getType ident
           splitOn ident typ (branch : branches)
 
@@ -296,16 +297,16 @@ coveredBy ideal (branch : branches) =
     coveredByRefined ident branches' constructor = do
       (refineTo, refinedTypes) <- constructorToPattern constructor
       let refined = apply (Subst [(ident, refineTo)]) ideal
-      trace ("refined: " ++ show ident ++ " to " ++ show refined) 
-        $ withTypes refinedTypes
-        $ coveredBy refined branches'
+      -- trace ("refined: " ++ show ident ++ " to " ++ show refined) 
+      withTypes refinedTypes $ coveredBy refined branches'
 
 
   
 test :: IO ()
 test = do
+  let tunit = TConstr "Unit"
   specify "simple tests" $ do
-    let rd = CoverageRead [0 |-> TUnit] [TUnit |-> [Constructor "MkUnit" []]]
+    let rd = CoverageRead [0 |-> tunit] [tunit |-> [Constructor "MkUnit" []]]
 
     runCoverageM 0 rd (checkCoverage (PBind 0) [PMatch "MkUnit" []])
       `shouldBe` (Right (), 0)
@@ -321,9 +322,9 @@ test = do
           [ 0 |-> TConstr "UnitList" ] 
           [ TConstr "UnitList" |-> 
             [ Constructor "Nil" []
-            , Constructor "Cons" [TUnit, TUnit]
+            , Constructor "Cons" [tunit, tunit]
             ]
-          , TUnit |-> [Constructor "MkUnit" []]
+          , tunit |-> [Constructor "MkUnit" []]
           ]
 
     specify "shallow match works" $ do
@@ -350,6 +351,28 @@ test = do
 
 \end{code}
 
+
+\begin{code}
+{-
+here is a sketch of how the algorithm works.
+
+The problem is to check if an *ideal pattern* $q$ is covered by a set of
+pattern-matching clauses $ρ$. If there is a substitution of variables $υ$ in $q$ 
+such that $υ q$ ($υ$ applied to $q$) equals $ρ_1$ then we can say that $ρ_1$
+is an *instance* of $q$. If, furthermore, the substitution $υ$ is an *injective renaming
+of variables*, then we know that 
+
+
+
+Implementation
+-}
+--------------
+\end{code}
+
+To kick things off, the obligatory language extensions and some imports
+
 [1]: https://stackoverflow.com/questions/7883023/algorithm-for-type-checking-ml-like-pattern-matching
 [2]: https://teh.id.au/posts/2017/03/10/simple-exhaustivity/index.html
 [3]: https://dl.acm.org/citation.cfm?id=5303
+
+[Coverage.hs]: https://github.com/adamschoenemann/clofrp/blob/master/library/CloFRP/Check/Coverage.hs
