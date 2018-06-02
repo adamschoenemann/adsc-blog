@@ -11,13 +11,16 @@ import           Text.Pandoc.Options
 -- | Not used by an example of how to customize the compiler
 customPandocCompiler :: Compiler (Item String)
 customPandocCompiler =
-    let 
-        defaultExtensions = readerExtensions defaultHakyllReaderOptions
-        newExtensions = enableExtension Ext_literate_haskell defaultExtensions 
-        readerOptions = defaultHakyllReaderOptions {
-                          readerExtensions = newExtensions
-                        }
-    in pandocCompilerWith readerOptions defaultHakyllWriterOptions 
+    let readerOptions = defaultHakyllReaderOptions
+        writerOptions = defaultHakyllWriterOptions { writerHTMLMathMethod = MathJax "" }
+    in  pandocCompilerWith readerOptions writerOptions
+    -- let 
+    --     defaultExtensions = readerExtensions defaultHakyllReaderOptions
+    --     newExtensions = enableExtension Ext_literate_haskell defaultExtensions 
+    --     readerOptions = defaultHakyllReaderOptions {
+    --                       readerExtensions = newExtensions
+    --                     }
+    -- in pandocCompilerWith readerOptions defaultHakyllWriterOptions 
 
 myFeedConfiguration :: FeedConfiguration
 myFeedConfiguration = FeedConfiguration
@@ -47,7 +50,7 @@ main = hakyll $ do
 
     match "posts/*" $ do
         route $ setExtension "html"
-        compile $ pandocCompiler
+        compile $ customPandocCompiler
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
             >>= saveSnapshot "content"
             >>= loadAndApplyTemplate "templates/default.html" postCtx

@@ -99,15 +99,13 @@ We need to define the language of types and patterns we\'ll be working on. Lets 
 it simple.
 
 \begin{code}
-
-type Name = String
 data Type 
-  = TConstr Name
+  = TConstr String
   deriving (Eq, Show)
 
 data Pattern ident
   = PBind ident
-  | PMatch Name [Pattern ident]
+  | PMatch String [Pattern ident]
   deriving (Eq, Show)
 \end{code}
 
@@ -116,10 +114,11 @@ or `IntList`. Our language does not have polymorphism, but the algorithm will wo
 fine with a bit of extra machinery for polymorphic types as well ([proof][Coverage.hs]).
 
 Patterns are slightly more complicated. A pattern can *bind* a value or it can *match*
-(destructure) a value. As an example, the clauses
+(destructure) a value. As an example, the clauses in
 ```haskell
-xs -> ...
-Cons x xs' -> ...
+case xs of
+  xs' -> ...
+  Cons x xs' -> ...
 ```
 would be encoded as
 ```haskell
@@ -128,15 +127,42 @@ would be encoded as
 ]
 ```
 We\'ll refrain from use infix pattern-operators like `(:)` and instead use their
-"ordinary" names just to simplify our implementation and presentation.
+\"ordinary\" prefix-form names just to simplify our implementation and presentation.
 
 You\'ll notice that `Pattern` is parameterized over `ident`. We use this to 
-later distinguish patterns with user-given "string" names and machine-generated 
-"fresh" names.
+distinguish patterns with user-given names and fresh machine-generated 
+names.
+
+Here is a sketch of how the algorithm works.
+
+\newcommand{\head}[0]{\mathit{head}\,}
+\newcommand{\tail}[0]{\mathit{tail}\,}
+\newcommand{\coveredBy}[0]{\mathit{coveredBy}\,}
+
+The algorithm $\coveredBy$ checks if an *ideal pattern* $q$ is covered by a list of
+patterns $ρ$.
+
+- If $ρ$ is the empty list, then we cannot cover $q$ and the match is not exhaustive
+- If there is a substitution of variables $υ$ in $q$ 
+  such that $υ\, q$ ($υ$ applied to $q$) equals $\head(ρ)$ then we can say that $\head(ρ)$
+  is an *instance* of $q$.
+  - If, furthermore, the substitution $υ$ is an *injective renaming
+    of variables*, then we know that $q$ is fully covered by $\head(ρ)$.
+    An injective substitution only maps variables to variables.
+  - Otherwise, then there is a mapping in $υ$ that maps a variable $x_1$ to a constructor.
+    For each constructor $c_i$ of $x_1$\'s type, apply the substitution
+    $\left[x_1 ↦ c_i\right]$
+    to $q$ giving $q'$, and solve $\coveredBy(q', ρ)$
+- If no such substitution exists, then $q$ cannot be covered by $\head(ρ)$ and so we try
+  with $\tail(ρ)$
+
+$$
+\frac{x_1}{\frac{\int_3^i dx}{\frac{di}{dx}}}
+$$
 
 \begin{code}
 
-type UserPattern = Pattern Name
+type UserPattern = Pattern String
 type UniqueIdent = Integer
 type IdealPattern = Pattern UniqueIdent
 
