@@ -66,14 +66,9 @@ so I could not steal his code shamelessly either.
 After pouring over McBride's explanation for many hours, I eventually discovered
 how to modify it to suit my needs by introducing just a tiny bit of extra state.
 
-The algorithm
--------------
-Disclaimer: just be absolutely clear, this algorithm is mostly due to
-[Augustsson][3] and just a small extension of the outline provided by [Conor
-McBride\'s StackOverflow answer][1]. I don\'t pretend to have invented anything
-novel.
-
-With that out of the way, let us start directly modeling our problem in Haskell.
+The language
+------------
+With that out of the way, let us start modeling our problem in Haskell.
 
 Since this is a literate Haskell file, we\'ll kick things off with some obligatory
 language extensions and imports.
@@ -113,17 +108,17 @@ Types are just an open set of nullary type constructors. So for example `Unit` o
 or `IntList`. Our language does not have polymorphism, but the algorithm will work
 fine with a bit of extra machinery for polymorphic types as well ([proof][Coverage.hs]).
 
-Patterns are slightly more complicated. A pattern can *bind* a value or it can *match*
+Patterns are only slightly more complicated. A pattern can *bind* a value or it can *match*
 (destructure) a value. As an example, the clauses in
 ```haskell
 case xs of
-  xs' -> ...
   Cons x xs' -> ...
+  xs' -> ...
 ```
 would be encoded as
 ```haskell
-[ PBind "xs"
-, PMatch "Cons" [PBind "x", PBind "xs'"]
+[ PMatch "Cons" [PBind "x", PBind "xs'"]
+, PBind "xs"
 ]
 ```
 We\'ll refrain from use infix pattern-operators like `(:)` and instead use their
@@ -133,68 +128,367 @@ You\'ll notice that `Pattern` is parameterized over `ident`. We use this to
 distinguish patterns with user-given names and fresh machine-generated 
 names.
 
+An initial algorithm
+-------------
+Disclaimer: just to be absolutely clear, this algorithm is mostly due to
+[Augustsson][3] and just a small extension of the outline provided by [Conor
+McBride\'s StackOverflow answer][1]. I don\'t pretend to have invented anything
+novel.
+
 Here is a sketch of how the algorithm works.
 
-\newcommand{\head}[0]{\mathit{head}\,}
-\newcommand{\tail}[0]{\mathit{tail}\,}
-\newcommand{\coveredBy}[0]{\mathit{coveredBy}\,}
+\newcommand{\head}[0]{\mathsf{head}}
+\newcommand{\tail}[0]{\mathsf{tail}}
+\newcommand{\coveredBy}[0]{\mathsf{coveredBy}}
 
-The algorithm $\coveredBy$ checks if an *ideal pattern* $q$ is covered by a list of
+The expression $q\, \coveredBy\, ρ$ checks if an *ideal pattern* $q$ is covered by a list of
 patterns $ρ$.
 
-- If $ρ$ is the empty list, then we cannot cover $q$ and the match is not exhaustive
-- If there is a substitution of variables $υ$ in $q$ 
+- If $ρ$ is the empty list, then we cannot cover $q$ and the match is not exhaustive.
+- If there is a substitution of variables $υ$ in $q$ .
   such that $υ\, q$ ($υ$ applied to $q$) equals $\head(ρ)$ then we can say that $\head(ρ)$
   is an *instance* of $q$.
   - If, furthermore, the substitution $υ$ is an *injective renaming
     of variables*, then we know that $q$ is fully covered by $\head(ρ)$.
-    An injective substitution only maps variables to variables.
+    Such a substitution only maps variables to variables.
   - Otherwise, then there is a mapping in $υ$ that maps a variable $x_1$ to a constructor.
     For each constructor $c_i$ of $x_1$\'s type, apply the substitution
     $\left[x_1 ↦ c_i\right]$
-    to $q$ giving $q'$, and solve $\coveredBy(q', ρ)$
-- If no such substitution exists, then $q$ cannot be covered by $\head(ρ)$ and so we try
-  with $\tail(ρ)$
+    to $q$ giving $q'$, and solve $q'\, \coveredBy\, ρ$.
+- If no such substitution exists, then $q$ cannot be covered by $\head(ρ)$ and so we
+  recurse with $q\, \coveredBy\, \tail(ρ)$.
 
-$$
-\frac{x_1}{\frac{\int_3^i dx}{\frac{di}{dx}}}
-$$
+An example
+==========
+The algorithm above will not detect redundant patterns, but before we refine it, let us
+see an example:
+``` haskell
+case xs of 
+  Nil -> ...
+  Cons x' xs' -> ...
+```
+This gives the problem `xs coveredBy [Nil, Cons x' xs']`
+
+We start comparing `xs` to `Nil`. There is a valid substitution $υ$, namely 
+$[xs ↦ \mathsf{Nil}]$. 
+Since `Nil` is not a variable, $υ$ is not injective, so we have to \"split\"
+on `xs` with each list constructor, giving us problems:
+
+```
+Nil coveredBy [Nil, Cons x' xs']
+Cons a´ b´ coveredBy [Nil, Cons x' xs']
+```
+Here, `a´` and `b´` are fresh names, so we postfix them with a tick for clarity.
+
+The first sub-problem
+has a solution of the empty substitution (which is injective) so we can discharge that.
+The second sub-problem will first try to find a substitution to unify `Cons \a´ \b´` and
+`Nil`, but no such substitution exists, so we\'ll discard Nil and move on to the next
+pattern.
+
+```
+Cons a´ b´ coveredBy [Cons x' xs']
+```
+
+There is an obvious substitution, namely $[a´ ↦ x', b´ ↦ xs']$, and the algorithm
+terminates with success.
+
+Redundant patterns
+------------------
+In McBride's answer, he shows how to detect any *overlapping* patterns. Whenever we discharge
+a case through an injective substitution, we can check that there are no other covering 
+patterns in our list. To use his example:
+``` haskell
+case xs of
+  Nil -> ...
+  ys -> ...
+```
+```
+xs coveredBy [Nil, ys]
+  Nil coveredBy [Nil, ys] <-- overlap with ys
+  Cons a´ b´ coveredBy [Nil, ys]
+```
+
+But this is not what we really want, since we want to permit catch-all patterns. My solution
+was to simply keep track of how many times a clause was used to discharge an ideal pattern,
+and then check that every clause was used at least once after the algorithm terminated. 
+Using this scheme, the example above would be permitted, whereas
+
+``` haskell
+case xs of 
+  Nil -> ...
+  Cons x' xs' -> ...
+  ys -> ... 
+```
+
+would be flagged, since the last clause is redundant.
+
+Now that we\'ve extended the original algorithm a bit, and gotten a better understanding
+of the problem, we can try to write a more detailed algorithm in pseudo-Haskell before
+proceeding to the implementation.
+
+``` Haskell
+checkCoverage :: IdealPattern -> List of Clauses -> Success or Failure
+checkCoverage q ρ =
+  if q `coveredBy` ρ
+    then if any ρᵢ was not used return Failure (ρᵢ is redundant)
+    else Success
+  
+coveredBy :: IdealPattern -> List of Clauses -> Success or Failure
+q `coveredBy` ρ =
+  if ρ is the empty list
+    then Failure (q is not covered!)
+  else 
+    let υ = a possibly-null substitution of q to (head ρ)
+    if υ is null 
+      then q `coveredBy` (tail ρ)
+    else 
+      if υ is injective 
+        then increment the usages of (head ρ) with 1
+        else 
+          let x = the variable in q that must map to some constructor
+          let τ = typeOf x
+          for each c in (constructorsOf τ)
+            let q' = q with x substituted for c
+            q' `coveredBy` ρ
+```
+
+Implementation
+--------------
+We\'ll start by formalizing some of the concepts used in the pseudo-code algorithm.
 
 \begin{code}
+type Name = String
+type ClausePattern = Pattern Name
+type FreshName = Integer
+type IdealPattern = Pattern FreshName
+\end{code}
 
-type UserPattern = Pattern String
-type UniqueIdent = Integer
-type IdealPattern = Pattern UniqueIdent
+These type-aliases will just make our code a bit more readable.
+We\'ll also need to fetch the constructors for a type at some point, so let\'s define those:
 
+\begin{code}
+data Constructor = Constructor Name [Type]
+\end{code}
+
+For example, the constructors of `IntList` are `Constructor "Nil" []` and 
+`Constructor "Cons" [TConstr "Int", TConstr "IntList"]`.
+
+The pseudo-code mentions substitutions, so lets define what a substitution 
+actually is.
+
+\begin{code}
+newtype Subst ident = Subst { unSubst :: [(FreshName, Pattern ident)] }
+  deriving (Eq, Show, Monoid)
+\end{code}
+
+We\'ll just use a newtype wrapper around an associative list. A more efficient implementation
+would of course be a `Map`, but for now let\'s keep things simple. Note that the domain
+of the substitution will alwas be `FreshName` since we never touch the patterns
+that the user has defined.
+
+Using structural recursion over `Pattern` we can apply a substitution
+to a pattern, giving us a new pattern.
+
+\begin{code}
+apply :: Subst FreshName -> Pattern FreshName -> Pattern FreshName
+apply (Subst assocs) = go where
+  go (PBind i) 
+    | Just pat' <- lookup i assocs = pat'
+    | otherwise = PBind i
+  go (PMatch nm subpats) =
+    PMatch nm (map go subpats)
+\end{code}
+
+We\'ll also need to know if a substitution is injective. We\'ll use a new datatype
+to represent this.
+
+\begin{code}
+data IsInjectiveResult
+  = Injective
+  | NotInjective FreshName
+  deriving (Show, Eq)
+\end{code}
+
+A substitution is either injective, or not-injective due to a binding. This datatype is
+isomorphic to `Maybe` but `Maybe`'s established semantics do not fit very well to this
+problem.
+
+We can easily establish whether a substitution is injective by recursing over the list
+it wraps.
+
+\begin{code}
+isInjective :: Subst ident -> IsInjectiveResult
+isInjective (Subst []) = Injective
+isInjective (Subst ((b,p):xs)) =
+  case p of
+    PBind _ -> isInjective (Subst xs)
+    PMatch _ _ -> NotInjective b
+\end{code}
+
+If we look at the pseudo-Haskell algorithm, we can identify some helper functions that
+we will most definitely need. We can also see that the computation must be able to
+fail in a few different ways. Seems like we\'ll need a monad! 
+We can create a type class that allows us to abstract over the exact representation of
+our computation, which will force us to stay at the domain-level when we\'re writing
+the implementation.
+
+\begin{code}
+class Monad m => Coverage m where
+  -- get the type of a name-binding
+  getType :: FreshName -> m Type
+  -- get the constructors of a type
+  getConstructors :: Type -> m [Constructor]
+  -- extend the computation with bindings of names to types
+  withTypes :: [(FreshName, Type)] -> m a -> m a
+  -- get a fresh name
+  freshName :: m FreshName
+  -- fail a coverage check
+  coverageError :: CoverageError -> m a
+\end{code}
+
+A coverage-check can fail for the reasons specified in the pseudo-Haskell, but we could
+also encounter some more \"low-level\" errors, like malformed patterns, empty types or 
+a failing lookup of types or constructors.
+
+\begin{code}
 data CoverageError
-  = RedundantBranches [UserPattern]
+  = RedundantClauses [ClausePattern]
   | CannotCover IdealPattern
-  | MalformedPattern UserPattern
+  | MalformedPattern ClausePattern
   | EmptyType Type
-  | NoTypeFound UniqueIdent
+  | NoTypeFound FreshName
   | NoConstructorsFound Type
   deriving (Show, Eq)
+\end{code}
 
-data Constructor = Constructor Name [Type]
+Since we\'re associating a number (usages) with each input clause, we\'ll create a
+datatype to maintain this association.
 
-class (Monad m, MonadState CoverageState m, MonadError CoverageError m) 
-  => Coverage m where
-      getType :: UniqueIdent -> m Type
-      getConstructors :: Type -> m [Constructor]
-      withTypes :: [(UniqueIdent, Type)] -> m a -> m a
+\begin{code}
+data Clause = Clause { usages :: Integer, pattern :: ClausePattern }
 
-data CoverageRead = CoverageRead 
-  { crTypes :: [(UniqueIdent, Type)]
-  , crConstructors :: [(Type, [Constructor])]
-  }
+useClause :: Clause -> Clause
+useClause br = br { usages = usages br + 1 }
+\end{code}
 
-type CoverageState = Integer
+With the main plumbing out of the way, we can jump right into the implementation of
+the `coveredBy` function, which checks that the patterns are exhaustive and updates
+the clauses with their number of usages.
 
+coveredBy
+=========
+
+\begin{code}
+coveredBy :: forall m. (Coverage m) => IdealPattern -> [Clause] -> m [Clause]
+coveredBy ideal [] = coverageError (CannotCover ideal)
+coveredBy ideal (clause : clauses) = 
+  ideal `hasSubst` pattern clause >>= \case
+    Nothing -> 
+      (clause :) <$> coveredBy ideal clauses
+
+    Just subst ->
+      case isInjective subst of
+        Injective -> 
+          pure (useClause clause : clauses)
+
+        NotInjective binding -> do
+          typ <- getType binding
+          constructors <- getConstructors typ
+          foldlM (coveredByRefined binding) (clause : clauses) constructors
+
+  where
+    coveredByRefined :: FreshName -> [Clause] -> Constructor -> m [Clause]
+    coveredByRefined fname clauses' constructor = do
+      (refineTo, refinedTypes) <- constructorToPattern constructor
+      let refined = apply (Subst [(fname, refineTo)]) ideal
+      withTypes refinedTypes (refined `coveredBy` clauses')
+\end{code}
+
+We update the usages of the clauses by returning them from the function. Even if we do
+not use a clause, we will still need to return it, so it won\'t "disappear"
+from the set of clauses for the next sub-problem. The main divergence from the 
+pseudo-Haskell the `coveredByRefined` helper function, which is iterated over the
+constructors of the type of the binding that we\'re splitting on. It uses the
+`constructorToPattern` function to convert a constructor of a type to a pattern.
+
+constructorToPattern
+====================
+\begin{code}
+constructorToPattern :: Coverage m => Constructor -> m (IdealPattern, [(FreshName, Type)])
+constructorToPattern (Constructor nm args) = do
+  let arglen = length args
+  freshNames <- replicateM arglen freshName
+  let typeAssocs = zip freshNames args
+  pure (PMatch nm (map PBind freshNames), typeAssocs)
+\end{code}
+
+Here we both generate fresh names to stand in for the arguments of the constructor, but
+we also return a list associating the names to their appropriate types.
+
+hasSubst
+========
+We also need to know if an ideal pattern can transformed into a covering pattern through
+a substitution, which we can define as
+
+\begin{code}
+hasSubst :: Coverage m => IdealPattern -> ClausePattern -> m (Maybe (Subst Name))
+hasSubst (PBind x) pat = pure . pure $ Subst [(x, pat)]
+hasSubst (PMatch nm1 pats1) (PMatch nm2 pats2)
+  | nm1 /= nm2 = 
+      pure Nothing
+  | length pats1 /= length pats2 = 
+      coverageError (MalformedPattern (PMatch nm2 pats2))
+  | null pats1 = pure (Just mempty)
+  | otherwise = 
+      mconcat <$> (sequence (zipWith hasSubst pats1 pats2))
+hasSubst (PMatch _ _) (PBind _) = pure (Just mempty)
+\end{code}
+
+- $x\, \mathsf{hasSubst}\, p$ is always the substitution $[x ↦ p]$.  
+- $(c_i\, p_1 \dots p_n)\; \mathsf{hasSubst}\; (c_i\, p'_1 \dots p'_n)$ is just the
+   concatenation of the substitutions of the sub-patterns.  
+- The last case is somewhat interesting as it says that
+  $(c_i\, p_1 \dots p_n)\; \mathsf{hasSubst}\; x$ is just the empty substitution.
+  This is contrary to Augustsson\'s method, where this is not true. Instead, the clauses
+  are refined along with the ideal pattern, so such a case does not occur. I could not find
+  a good reason to do this though, so I chose to bake in this notion of generality instead.
+
+checkCoverage
+=============
+We can now put the icing on the cake and define the function that actually
+aplies the coverage checking algorithm!
+
+\begin{code}
+checkCoverage :: Coverage m => IdealPattern -> [ClausePattern] -> m ()
+checkCoverage ideal userpats = do
+  checkedClausees <- ideal `coveredBy` (map asClause userpats) 
+  let unreached = unusedPatterns checkedClausees
+  if length unreached > 0
+    then coverageError $ RedundantClauses unreached
+    else pure ()
+  where 
+    asClause pat = Clause { usages = 0, pattern = pat }
+
+    unusedPatterns clauses = 
+      let onlyUnused = \br -> if usages br < 1 then Just (pattern br) else Nothing
+      in  catMaybes (map onlyUnused clauses)
+\end{code}
+
+It is very like the pseudo-Haskell specification, but with a bit more book-keeping to
+set up and tear down the state we need.
+
+Testing our code
+-----------------
+Now, we can start working out how to actually run and test our algorithm. We have to start
+by picking a concrete datatype to implement our `Coverage` type class.
+
+\begin{code}
 newtype CoverageM r = CoverageM 
-  { unCoverageM 
-      :: ExceptT 
-          CoverageError 
-          (StateT CoverageState (Reader CoverageRead)) r 
+  { unCoverageM :: 
+      ExceptT 
+        CoverageError 
+        (StateT CoverageState (Reader CoverageRead)) r 
   }
   deriving ( Functor
            , Applicative
@@ -204,6 +498,41 @@ newtype CoverageM r = CoverageM
            , MonadReader CoverageRead
            )
 
+data CoverageRead = CoverageRead 
+  { crTypes :: [(FreshName, Type)]
+  , crConstructors :: [(Type, [Constructor])]
+  }
+
+type CoverageState = Integer
+\end{code}
+
+We use the `GeneralizedNewtypeDeriving` language extension along with monad transformers to
+derive a bunch of nifty functionality for us! If you\'re not familiar with monad transformers,
+this might look a bit arcane, but it really is just boilerplate. To keep things simple, we
+again use associative lists where `Map` might be more appropriate.
+
+We can now make our `CoverageM` monad an instance of our `Coverage` type class, and
+then define a way to run a computation in our monad.
+
+\begin{code}
+instance Coverage CoverageM where
+  getType uid = 
+    asks crTypes
+    >>= maybe (coverageError $ NoTypeFound uid) pure . lookup uid
+
+  getConstructors typ = 
+    asks crConstructors
+    >>= maybe (coverageError $ NoConstructorsFound typ) noEmptyTypes . lookup typ
+    where
+      noEmptyTypes [] = coverageError (EmptyType typ)
+      noEmptyTypes cs = pure cs
+  
+  withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
+  
+  freshName = get >>= (\i -> modify (+1) >> pure i)
+  
+  coverageError = throwError
+
 runCoverageM
   :: CoverageState
   -> CoverageRead
@@ -211,123 +540,13 @@ runCoverageM
   -> (Either CoverageError a, CoverageState)
 runCoverageM st rd (CoverageM x) = 
   runReader (runStateT (runExceptT x) st) rd
-  
-instance Coverage CoverageM where
-  getType uid = 
-    asks crTypes
-    >>= maybe (throwError $ NoTypeFound uid) pure . lookup uid
+\end{code}
 
-  getConstructors typ = 
-    asks crConstructors
-    >>= maybe (throwError $ NoConstructorsFound typ) pure . lookup typ
-  
-  withTypes types = local (\r -> r { crTypes = types ++ crTypes r })
+Finally, we can test our algorithm on some example inputs. Normally, I would use a testing
+framework like [Tasty][4], but for this blog post let us just do some quick and dirty
+testing.
 
-
-constructorToPattern :: MonadState UniqueIdent m => Constructor -> m (IdealPattern, [(UniqueIdent, Type)])
-constructorToPattern (Constructor nm args) = do
-  let arglen = length args
-  newIdents <- replicateM arglen newIdent
-  let typeAssocs = zip newIdents args
-  pure (PMatch nm (map PBind newIdents), typeAssocs)
-  where
-    newIdent = get >>= (\i -> modify (+1) >> pure i)
-
-data Branch = Branch { usages :: Integer, pattern :: UserPattern }
-
-useBranch :: Branch -> Branch
-useBranch br = br { usages = usages br + 1 }
-
-newtype Subst ident = Subst { unSubst :: [(UniqueIdent, Pattern ident)] }
-  deriving (Eq, Show, Monoid)
-
-apply :: Subst UniqueIdent -> Pattern UniqueIdent -> Pattern UniqueIdent
-apply (Subst assocs) = go where
-  go pat@(PBind i) 
-    | Just pat' <- lookup i assocs = pat'
-    | otherwise = pat
-  go (PMatch nm subpats) =
-    PMatch nm (map go subpats)
-
-hasSubst :: MonadError CoverageError m => IdealPattern -> UserPattern -> m (Maybe (Subst Name))
-hasSubst (PBind x1) pat = pure . pure $ Subst [(x1, pat)]
-hasSubst (PMatch nm1 pats1) pat@(PMatch nm2 pats2)
-  | nm1 /= nm2 = 
-      pure Nothing
-  | length pats1 /= length pats2 = 
-      throwError (MalformedPattern pat)
-  | null pats1 = pure (Just mempty)
-  | otherwise = 
-      mconcat <$> (sequence $ (zipWith hasSubst pats1 pats2))
-hasSubst (PMatch _ _) _pat = pure (Just mempty)
-
-data IsInjectiveResult
-  = Injective
-  | NotInjective UniqueIdent
-  deriving (Show, Eq)
-
-isInjective :: Subst ident -> IsInjectiveResult
-isInjective (Subst []) = Injective
-isInjective (Subst ((b,p):xs)) =
-  case p of
-    PBind _ -> isInjective (Subst xs)
-    PMatch _ _ -> NotInjective b
-
-checkCoverage 
-  :: Coverage m
-  => IdealPattern -> [UserPattern] -> m ()
-checkCoverage ideal userpats = do
-  checkedBranches <- (ideal `coveredBy` (map asBranch userpats)) 
-  let unreached = unusedPatterns checkedBranches
-  if length unreached > 0
-    then throwError $ RedundantBranches unreached
-    else pure ()
-  where 
-    asBranch pat = Branch { usages = 0, pattern = pat }
-
-    unusedPatterns clauses = 
-      let onlyUnused = \br -> if usages br < 1 then Just (pattern br) else Nothing
-      in  catMaybes (map onlyUnused clauses)
-
-coveredBy 
-  :: forall m. (Coverage m)
-  => IdealPattern -> [Branch] -> m [Branch]
-coveredBy ideal [] = throwError (CannotCover ideal)
-coveredBy ideal (branch : branches) = 
-  hasSubst ideal (pattern branch) >>= \case
-    Nothing -> do
-      -- traceM (show ideal ++ " not covered by " ++ show (pattern branch))
-      (branch :) <$> coveredBy ideal branches
-
-    Just subst ->
-      case isInjective subst of
-        Injective -> do
-          -- traceM (show ideal ++ " covered by " ++ show (pattern branch)) 
-          pure (useBranch branch : branches)
-
-        NotInjective ident -> do
-          -- traceM $ "not injective: " ++ show subst
-          typ <- getType ident
-          splitOn ident typ (branch : branches)
-
-  where
-    splitOn :: UniqueIdent -> Type -> [Branch] -> m [Branch]
-    splitOn ident typ branches' = 
-      getConstructors typ >>= \case
-        [] -> 
-          throwError (EmptyType typ)
-
-        constructors -> 
-          foldlM (coveredByRefined ident) branches' constructors
-    
-    coveredByRefined ident branches' constructor = do
-      (refineTo, refinedTypes) <- constructorToPattern constructor
-      let refined = apply (Subst [(ident, refineTo)]) ideal
-      -- trace ("refined: " ++ show ident ++ " to " ++ show refined) 
-      withTypes refinedTypes $ coveredBy refined branches'
-
-
-  
+\begin{code}
 test :: IO ()
 test = do
   let tunit = TConstr "Unit"
@@ -341,7 +560,7 @@ test = do
       `shouldBe` (Left (CannotCover (PMatch "MkUnit" [])), 0)
 
     runCoverageM 0 rd (checkCoverage (PBind 0) [PMatch "MkUnit" [], PBind "x"])
-      `shouldBe` (Left (RedundantBranches [PBind "x"]), 0)
+      `shouldBe` (Left (RedundantClauses [PBind "x"]), 0)
 
   specify "slightly more advanced" $ do
     let rd = CoverageRead 
@@ -374,31 +593,26 @@ test = do
       | x == y = pure ()
       | otherwise = error $ "Expected " ++ show x ++ " to equal " ++ show y
     (|->) x y = (x,y)
-
 \end{code}
 
+These tests are hardly exhaustive, but they will do for our purposes. Since this algorithm
+is quite simple yet has real-world uses, it'd be a fun exercise to write some property-based
+tests for it, or even to prove some simple properties about it. Off the top of my head, I
+can think of
 
-\begin{code}
-{-
-here is a sketch of how the algorithm works.
+- If `q` is un-redundantly covered by `ρ`, then duplicating any pattern `ρᵢ` in `ρ` will
+  cause a redundant-pattern error with `ρᵢ`.
+- If `q` is not covered by `ρ`, we can fix it by inserting a catch-all pattern
+  into the end of `ρ`.
+- If `q` is covered by `ρ`, then ``q `coveredBy` (PBind "x" : ρ)`` will cause a 
+  redundant-pattern error with `ρ`.
+  
+Thanks for reading!
 
-The problem is to check if an *ideal pattern* $q$ is covered by a set of
-pattern-matching clauses $ρ$. If there is a substitution of variables $υ$ in $q$ 
-such that $υ q$ ($υ$ applied to $q$) equals $ρ_1$ then we can say that $ρ_1$
-is an *instance* of $q$. If, furthermore, the substitution $υ$ is an *injective renaming
-of variables*, then we know that 
-
-
-
-Implementation
--}
---------------
-\end{code}
-
-To kick things off, the obligatory language extensions and some imports
 
 [1]: https://stackoverflow.com/questions/7883023/algorithm-for-type-checking-ml-like-pattern-matching
 [2]: https://teh.id.au/posts/2017/03/10/simple-exhaustivity/index.html
 [3]: https://dl.acm.org/citation.cfm?id=5303
+[4]: https://hackage.haskell.org/package/tasty
 
 [Coverage.hs]: https://github.com/adamschoenemann/clofrp/blob/master/library/CloFRP/Check/Coverage.hs

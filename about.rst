@@ -15,5 +15,8 @@ You can send me a mail at ``adamschoenemann`` at gmail, and also find me
 on `GitHub<https://github.com/adamschoenemann>`_ and 
 `LinkedIn<https://www.linkedin.com/in/adamschoenemann/>`_.
 
+I am currently looking for a job as a functional programmer in the Copenhagen
+area or remotely in Europe.
+
 Aside from programming I listen to a lot of music, mostly metal. I also am an 
 avid drummer, primarily in the band `ORM<https://www.facebook.com/ormband/>`_.
