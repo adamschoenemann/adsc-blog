@@ -182,20 +182,20 @@ Here, `a´` and `b´` are fresh names, so we postfix them with a tick for clarit
 
 The first sub-problem
 has a solution of the empty substitution (which is injective) so we can discharge that.
-The second sub-problem will first try to find a substitution to unify `Cons \a´ \b´` and
-`Nil`, but no such substitution exists, so we\'ll discard Nil and move on to the next
+The second sub-problem will first try to find a substitution to unify `Cons a´ b´` and
+`Nil`, but no such substitution exists, so we\'ll discard `Nil` and move on to the next
 pattern.
 
 ```
 Cons a´ b´ coveredBy [Cons x' xs']
 ```
 
-There is an obvious substitution, namely $[a´ ↦ x', b´ ↦ xs']$, and the algorithm
+There is an obvious injective substitution, namely $[a´ ↦ x', b´ ↦ xs']$, and the algorithm
 terminates with success.
 
 Redundant patterns
 ------------------
-In McBride's answer, he shows how to detect any *overlapping* patterns. Whenever we discharge
+In McBride\'s answer, he shows how to detect any *overlapping* patterns. Whenever we discharge
 a case through an injective substitution, we can check that there are no other covering 
 patterns in our list. To use his example:
 ``` haskell
@@ -239,8 +239,8 @@ q `coveredBy` ρ =
   if ρ is the empty list
     then Failure (q is not covered!)
   else 
-    let υ = a possibly-null substitution of q to (head ρ)
-    if υ is null 
+    let υ = a substitution such that υ q = ρ
+    if υ exists
       then q `coveredBy` (tail ρ)
     else 
       if υ is injective 
@@ -264,7 +264,7 @@ type FreshName = Integer
 type IdealPattern = Pattern FreshName
 \end{code}
 
-These type-aliases will just make our code a bit more readable.
+These type synonyms will just make our code a bit more readable.
 We\'ll also need to fetch the constructors for a type at some point, so let\'s define those:
 
 \begin{code}
