@@ -1,14 +1,14 @@
 ---
 title: Pattern matching ADTs
 ---
-This post is about implementing coverage checking of pattern matches in Haskell.
-It does not involve any super-advanced type-level trickery, so if you're comfortable
-reading just-above-basic Haskell you should be fine.
+This post is about implementing coverage checking of pattern matches using Haskell.
+It does not involve any super-advanced type-level trickery, so as long you\'re 
+somewhat comfortable with monad transformers you should be fine.
 
 Introduction
 ------------
 Pattern matching coverage on generalized algebraic datatypes is a complicated problem, and 
-has seen many attempts at a solution in recent years. Pattern matching 
+has seen many attempts at a solution in recent years. In contrast, pattern matching 
 on ordinary ADTs is often simply mentioned as a trivial matter and delegated to 
 a footnoote. When I recently had to implement a coverage checking algorithm in a 
 Haskell-like language *without* GADTs, I found that there was a dearth of 

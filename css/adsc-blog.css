@@ -25,6 +25,13 @@ main {
     padding: 30px 60px 50px 60px;
 }
 
+@media only screen and (max-width: 600px) {
+    main {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+}
+
 footer {
     background-color: #2E1322;
     padding: 20px;
