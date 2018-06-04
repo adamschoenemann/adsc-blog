@@ -7,7 +7,7 @@ somewhat comfortable with monad transformers you should be fine.
 
 Introduction
 ------------
-Pattern matching coverage on generalized algebraic datatypes is a complicated problem, and 
+Pattern matching coverage on generalized algebraic data types is a complicated problem, and 
 has seen many attempts at a solution in recent years. In contrast, pattern matching 
 on ordinary ADTs is often simply mentioned as a trivial matter and delegated to 
 a footnoote. When I recently had to implement a coverage checking algorithm in a 
@@ -36,15 +36,15 @@ of problems:
   ``` haskell
   case xs of
     [] -> ...
-    (x : xs') -> ...
+    x : xs' -> ...
     xs' -> ...
   ```
   In this example, the last branch is essentially dead code, as it will never
   be reached.
 
 The only information I could find on the internet on coverage checking was Conor McBride\'s
-[great StackOverflow answer][1] which explains the core idea behind Lennart Augustsson\'s 
-technique for compiling pattern matches. I also found a kindred spirit in 
+[great StackOverflow answer][1] which explains the core idea [behind Lennart Augustsson\'s 
+technique for compiling pattern matches][3]. I also found a kindred spirit in 
 Tim Humphries who had encountered the same lack of information and devised
 [an algorithm using tries][2].
 
@@ -59,11 +59,11 @@ case xs of
 would be flagged as an issue, since `xs'` strictly overlaps with `[]`. But this
 is rarely what we want since we often use catch-all patterns for convenience.
 
-While I only took a cursory look at Tim Humphries' implementation, 
+While I only took a cursory look at Tim Humphries\' implementation, 
 it did not appear to make any attempt at checking anything beyond exhaustivity,
 so I could not steal his code shamelessly either.
 
-After pouring over McBride's explanation for many hours, I eventually discovered
+After pouring over McBride\'s explanation for many hours, I eventually discovered
 how to modify it to suit my needs by introducing just a tiny bit of extra state.
 
 The language
@@ -106,7 +106,7 @@ data Pattern ident
 
 Types are just an open set of nullary type constructors. So for example `Unit` or `Boolean`
 or `IntList`. Our language does not have polymorphism, but the algorithm will work
-fine with a bit of extra machinery for polymorphic types as well ([proof][Coverage.hs]).
+fine with a bit of extra machinery for polymorphic types as well ([demonstration][Coverage.hs]).
 
 Patterns are only slightly more complicated. A pattern can *bind* a value or it can *match*
 (destructure) a value. As an example, the clauses in
@@ -122,7 +122,7 @@ would be encoded as
 ]
 ```
 We\'ll refrain from use infix pattern-operators like `(:)` and instead use their
-\"ordinary\" prefix-form names just to simplify our implementation and presentation.
+\"ordinary\" prefix-form names (e.g. `Cons` for `(:)`) just to simplify our implementation and presentation.
 
 You\'ll notice that `Pattern` is parameterized over `ident`. We use this to 
 distinguish patterns with user-given names and fresh machine-generated 
@@ -145,10 +145,9 @@ The expression $q\, \coveredBy\, ρ$ checks if an *ideal pattern* $q$ is covered
 patterns $ρ$.
 
 - If $ρ$ is the empty list, then we cannot cover $q$ and the match is not exhaustive.
-- If there is a substitution of variables $υ$ in $q$ .
-  such that $υ\, q$ ($υ$ applied to $q$) equals $\head(ρ)$ then we can say that $\head(ρ)$
-  is an *instance* of $q$.
-  - If, furthermore, the substitution $υ$ is an *injective renaming
+- If there is a substitution of variables $υ$ in $q$ 
+  such that $υ\, q$ ($υ$ applied to $q$) equals $\head(ρ)$ then:
+  - If the substitution $υ$ is an *injective renaming
     of variables*, then we know that $q$ is fully covered by $\head(ρ)$.
     Such a substitution only maps variables to variables.
   - Otherwise, then there is a mapping in $υ$ that maps a variable $x_1$ to a constructor.
@@ -160,7 +159,7 @@ patterns $ρ$.
 
 An example
 ==========
-The algorithm above will not detect redundant patterns, but before we refine it, let us
+The algorithm above will not detect redundant patterns, but before we extend it to do so, let us
 see an example:
 ``` haskell
 case xs of 
@@ -170,7 +169,7 @@ case xs of
 This gives the problem `xs coveredBy [Nil, Cons x' xs']`
 
 We start comparing `xs` to `Nil`. There is a valid substitution $υ$, namely 
-$[xs ↦ \mathsf{Nil}]$. 
+`[xs ↦ Nil]`. 
 Since `Nil` is not a variable, $υ$ is not injective, so we have to \"split\"
 on `xs` with each list constructor, giving us problems:
 
@@ -190,7 +189,7 @@ pattern.
 Cons a´ b´ coveredBy [Cons x' xs']
 ```
 
-There is an obvious injective substitution, namely $[a´ ↦ x', b´ ↦ xs']$, and the algorithm
+There is an obvious injective substitution, namely `[a´ ↦ x', b´ ↦ xs']`, and the algorithm
 terminates with success.
 
 Redundant patterns
@@ -223,7 +222,7 @@ case xs of
 
 would be flagged, since the last clause is redundant.
 
-Now that we\'ve extended the original algorithm a bit, and gotten a better understanding
+Now that we\'ve extended the original algorithm a bit and we have a better understanding
 of the problem, we can try to write a more detailed algorithm in pseudo-Haskell before
 proceeding to the implementation.
 
@@ -239,8 +238,8 @@ q `coveredBy` ρ =
   if ρ is the empty list
     then Failure (q is not covered!)
   else 
-    let υ = a substitution such that υ q = ρ
-    if υ exists
+    let υ = a substitution such that υ q = (head ρ)   or  nothing
+    if υ is nothing
       then q `coveredBy` (tail ρ)
     else 
       if υ is injective 
@@ -295,12 +294,12 @@ apply :: Subst FreshName -> Pattern FreshName -> Pattern FreshName
 apply (Subst assocs) = go where
   go (PBind i) 
     | Just pat' <- lookup i assocs = pat'
-    | otherwise = PBind i
+    | otherwise                    = PBind i
   go (PMatch nm subpats) =
     PMatch nm (map go subpats)
 \end{code}
 
-We\'ll also need to know if a substitution is injective. We\'ll use a new datatype
+We\'ll also need to know if a substitution is injective. We\'ll use a new data type
 to represent this.
 
 \begin{code}
@@ -310,19 +309,20 @@ data IsInjectiveResult
   deriving (Show, Eq)
 \end{code}
 
-A substitution is either injective, or not-injective due to a binding. This datatype is
-isomorphic to `Maybe` but `Maybe`'s established semantics do not fit very well to this
-problem.
+A substitution is either injective, or not-injective due to a binding. This data type is
+isomorphic to `Maybe` but `Maybe`\'s established semantics do not fit very well to this
+problem, we we\'ll use our own data type.
 
 We can easily establish whether a substitution is injective by recursing over the list
 it wraps.
 
 \begin{code}
 isInjective :: Subst ident -> IsInjectiveResult
-isInjective (Subst []) = Injective
-isInjective (Subst ((b,p):xs)) =
-  case p of
-    PBind _ -> isInjective (Subst xs)
+isInjective (Subst xs) = go xs where
+  go [] = Injective
+  go ((b, p) : xs') =
+    case p of
+    PBind _    -> go xs'
     PMatch _ _ -> NotInjective b
 \end{code}
 
@@ -372,6 +372,11 @@ useClause :: Clause -> Clause
 useClause br = br { usages = usages br + 1 }
 \end{code}
 
+Looking at the specification, we could make do with a boolean field since we only
+keep track of the used/not-used state of clauses. I\'ll stick with the `Integer`
+field though, as it could potentially be useful information, for debugging 
+purposes if nothing else.
+
 With the main plumbing out of the way, we can jump right into the implementation of
 the `coveredBy` function, which checks that the patterns are exhaustive and updates
 the clauses with their number of usages.
@@ -380,6 +385,8 @@ coveredBy
 =========
 
 \begin{code}
+-- the explicit forall is so we can refer back to `m` in the signature of the
+-- where-binding
 coveredBy :: forall m. (Coverage m) => IdealPattern -> [Clause] -> m [Clause]
 coveredBy ideal [] = coverageError (CannotCover ideal)
 coveredBy ideal (clause : clauses) = 
@@ -406,9 +413,9 @@ coveredBy ideal (clause : clauses) =
 \end{code}
 
 We update the usages of the clauses by returning them from the function. Even if we do
-not use a clause, we will still need to return it, so it won\'t "disappear"
+not use a clause, we will still need to return it, so it won\'t \"disappear\"
 from the set of clauses for the next sub-problem. The main divergence from the 
-pseudo-Haskell the `coveredByRefined` helper function, which is iterated over the
+pseudo-Haskell is the `coveredByRefined` helper function, which is iterated over the
 constructors of the type of the binding that we\'re splitting on. It uses the
 `constructorToPattern` function to convert a constructor of a type to a pattern.
 
@@ -446,10 +453,10 @@ hasSubst (PMatch _ _) (PBind _) = pure (Just mempty)
 \end{code}
 
 - $x\, \mathsf{hasSubst}\, p$ is always the substitution $[x ↦ p]$.  
-- $(c_i\, p_1 \dots p_n)\; \mathsf{hasSubst}\; (c_i\, p'_1 \dots p'_n)$ is just the
+- $(c\, p_1 \dots p_n)\; \mathsf{hasSubst}\; (c\, p'_1 \dots p'_n)$ is just the
    concatenation of the substitutions of the sub-patterns.  
 - The last case is somewhat interesting as it says that
-  $(c_i\, p_1 \dots p_n)\; \mathsf{hasSubst}\; x$ is just the empty substitution.
+  $(c\, p_1 \dots p_n)\; \mathsf{hasSubst}\; x$ is just the empty substitution.
   This is contrary to Augustsson\'s method, where this is not true. Instead, the clauses
   are refined along with the ideal pattern, so such a case does not occur. I could not find
   a good reason to do this though, so I chose to bake in this notion of generality instead.
@@ -463,15 +470,14 @@ aplies the coverage checking algorithm!
 checkCoverage :: Coverage m => IdealPattern -> [ClausePattern] -> m ()
 checkCoverage ideal userpats = do
   checkedClausees <- ideal `coveredBy` (map asClause userpats) 
-  let unreached = unusedPatterns checkedClausees
-  if length unreached > 0
-    then coverageError $ RedundantClauses unreached
-    else pure ()
+  case unusedPatterns checkedClausees of
+    [] -> pure ()
+    unreached -> coverageError $ RedundantClauses unreached
   where 
     asClause pat = Clause { usages = 0, pattern = pat }
 
     unusedPatterns clauses = 
-      let onlyUnused = \br -> if usages br < 1 then Just (pattern br) else Nothing
+      let onlyUnused = \cl -> if usages cl < 1 then Just (pattern cl) else Nothing
       in  catMaybes (map onlyUnused clauses)
 \end{code}
 
@@ -596,18 +602,23 @@ test = do
 \end{code}
 
 These tests are hardly exhaustive, but they will do for our purposes. Since this algorithm
-is quite simple yet has real-world uses, it'd be a fun exercise to write some property-based
+is quite simple yet has real-world uses, it\'d be a fun exercise to write some property-based
 tests for it, or even to prove some simple properties about it. Off the top of my head, I
 can think of
 
-- If `q` is un-redundantly covered by `ρ`, then duplicating any pattern `ρᵢ` in `ρ` will
+- If `q` is successfully covered by `ρ`, then duplicating any pattern `ρᵢ` in `ρ` will
   cause a redundant-pattern error with `ρᵢ`.
 - If `q` is not covered by `ρ`, we can fix it by inserting a catch-all pattern
   into the end of `ρ`.
 - If `q` is covered by `ρ`, then ``q `coveredBy` (PBind "x" : ρ)`` will cause a 
   redundant-pattern error with `ρ`.
+
+Furthermore, a space/time complexity analysis of the algorithm should also be an 
+interesting (yet surmountable) task. Haskell\'s lazy semantics are quite useful,
+but always provide for extra challenge when attempting to reason about the
+runtime characteristics of your code.
   
-Thanks for reading!
+That\'s it for now, thanks for reading!
 
 
 [1]: https://stackoverflow.com/questions/7883023/algorithm-for-type-checking-ml-like-pattern-matching

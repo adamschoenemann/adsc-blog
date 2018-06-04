@@ -8,6 +8,29 @@ Author URI: http://katychuang.com
 Tags: custom-colors, theme-options, two-columns, fixed-width, rtl-language-support, custom-background, translation-ready, blog, photography, portfolio, clean, elegant, minimal
 */
 
+@font-face {
+  font-family: 'DejaVu Sans Mono';
+  src: url('/fonts/dejavu/dejavusansmono-webfont.eot'); /* IE9 Compat Modes */
+  src: url('/fonts/dejavu/dejavusansmono-webfont.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+       url('/fonts/dejavu/dejavusansmono-webfont.woff') format('woff'), /* Modern Browsers */
+       url('/fonts/dejavu/dejavusansmono-webfont.ttf')  format('truetype'), /* Safari, Android, iOS */
+       url('/fonts/dejavu/dejavusansmono-webfont.svg#svgFontName') format('svg'); /* Legacy iOS */
+}
+
+/* @font-face {
+  font-family: 'Lucida Sans';
+  src: url('/fonts/lucida/lucida-sans-unicode.eot') format('truetype');
+  src: url('/fonts/lucida/lucida-sans-unicode.eot?#iefix') format('embedded-opentype'),
+       url('/fonts/lucida/lucida-sans-unicode.ttf') format('truetype');
+} */
+@font-face {
+  font-family: 'Lucida Sans';
+  src: url('/fonts/lucida/lucida-sans-unicode.eot'); /* IE9 Compat Modes */
+  src: url('/fonts/lucida/lucida-sans-unicode.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+       url('/fonts/lucida/lucida-sans-unicode.woff') format('woff'), /* Modern Browsers */
+       url('/fonts/lucida/lucida-sans-unicode.ttf')  format('truetype'); /* Safari, Android, iOS */
+}
+
 
 body {
     background-color: rgb(248, 249, 250);
@@ -17,7 +40,7 @@ body {
     max-width: 860px;
     padding: 30px 0 0 0;
     /* font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif; */
-    font-family: "open sans", "Helvetica Neue","Microsoft Yahei",Helvetica,Arial,sans-serif;
+    font-family: "open sans", "Lucida Sans", "Helvetica Neue","Microsoft Yahei",Helvetica,Arial,sans-serif;
 }
 
 main {
