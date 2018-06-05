@@ -141,8 +141,9 @@ Here is a sketch of how the algorithm works.
 \newcommand{\tail}[0]{\mathsf{tail}}
 \newcommand{\coveredBy}[0]{\mathsf{coveredBy}}
 
-The expression $q\, \coveredBy\, ρ$ checks if an *ideal pattern* $q$ is covered by a list of
-patterns $ρ$.
+The expression $q\, \coveredBy\, ρ$ checks if an \"ideal pattern\" $q$ is covered by a list 
+of actual patterns $ρ$. The ideal pattern starts off being a simple name-binding pattern,
+and is further refined when needed through the algorithm.
 
 - If $ρ$ is the empty list, then we cannot cover $q$ and the match is not exhaustive.
 - If there is a substitution of variables $υ$ in $q$ 
