@@ -574,7 +574,7 @@ test = do
           [ 0 |-> TConstr "UnitList" ] 
           [ TConstr "UnitList" |-> 
             [ Constructor "Nil" []
-            , Constructor "Cons" [tunit, tunit]
+            , Constructor "Cons" [tunit, TConstr "UnitList"]
             ]
           , tunit |-> [Constructor "MkUnit" []]
           ]
