@@ -12,7 +12,11 @@ Many algorithms are most naturally expressed using recursion, but the JVM is jus
 You can of course always increase the JVM stack size but this hampers the portability and safety of the code when deployed.
 
 A special case of recursion is called **tail-recursion**.
-A tail-recursive function has recursive calls *only as the last operation before a return*.
+A tail-recursive function has recursive calls *only immediately after a return*.
+Or as stated in [this StackOverflow answer][6]: 
+
+> ... the return value of any given recursive step is the same as the return value of the next recursive call.
+
 For (a contrived) example:
 
 ```kotlin
@@ -36,8 +40,9 @@ For example the factorial function[^fn1].
 ```kotlin
 fun factorial(n: Long): Long = if (n <= 1) n else n * factorial(n - 1)
 ```
+Note that it is *not* tail-recursive, because the last statement in the recursive case is not simply a recursive call but is "guarded" underneath the multiplication.
 
-We can rewrite it with trampolines as such:
+We can rewrite `factorial` with trampolines as such:
 
 ```kotlin
 fun tfactorial(n: Long): Trampoline<Long> =
@@ -188,5 +193,6 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [3]:https://www.datchley.name/recursion-tail-calls-and-trampolines/
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
 [5]:https://kotlinlang.org/docs/reference/basic-syntax.html
+[6]:https://stackoverflow.com/questions/33923/what-is-tail-recursion
 [^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
