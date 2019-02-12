@@ -22,7 +22,7 @@ fun countdown(n: Long): Long = if (n <= 0) then n else countdown(n-1)
 Such functions can be optimized into an iterative style through *tail-recursion optimization*.
 You can probably imagine in your head how to rewrite `countdown` above using just a loop, and the same general transformation can be done by a compiler.
 In fact, Kotlin is capable of tail-recursion optimization but there is not always an easy way to express an algorithm with tail-recursion only.
-Instead, we can rewrite our recursive code using *trampolines*.
+Instead, we can rewrite our recursive code using **trampolines**.
 [Wikipedia][1] has this to say about trampolines:
 
 > ... a trampoline is a loop that iteratively invokes thunk-returning functions (continuation-passing style). A single trampoline suffices to express all control transfers of a program; a program so expressed is trampolined, or in trampolined style; converting a program to trampolined style is trampolining. Programmers can use trampolined functions to implement tail-recursive function calls in stack-oriented programming languages.
@@ -188,5 +188,5 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [3]:https://www.datchley.name/recursion-tail-calls-and-trampolines/
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
 [5]:https://kotlinlang.org/docs/reference/basic-syntax.html
-[^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
+[^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional reasons.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
