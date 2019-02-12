@@ -16,7 +16,7 @@ There are multiple blog posts out there ([this][2], [that][3] and [this one][4])
 We'll see how shortly but first an example of trampolining a function.
 
 It is straightforward to port existing recursive code to trampolined code.
-For example the fibonacci function.
+For example the factorial function[^fn1].
 
 ```kotlin
 fun factorial(n: Long): Long = if (n <= 1) n else n * factorial(n - 1)
@@ -27,11 +27,16 @@ We can rewrite it with trampolines as such:
 ```kotlin
 fun tfactorial(n: Long): Trampoline<Long> =
         if (n <= 1) done(n)
-        else delay { tfactorial(n - 1) }.flatMap { done(it * n) }
+        else delay(fun () = tfactorial(n - 1)).flatMap(fun (m) = done(m * n))
 
 fun fact(n: Long) = tfactorial(n).run()
 ```
-The structure of the code remains the same but we wrap the branches in the appropriate trampoline combinators and use flatmap to use the result of a recursive call.
+
+If you're not familiar with Kotlin, the most foreign syntax for you is probably the anonymous (lambda) functions.
+The `fun () = ...` argument to `delay` introduces an anonymous function[^fn2] that doesn't depend on its arguments and computes `tfactorial(n - 1)` thus effectively delaying the execution of the recursive call to `tfactorial`.
+`fun (m) = done(m * n)` binds `m` to the result of recursive call on which we call `flatMap`.
+
+Note that the structure of the code remains the same as in the un-trampolined version, but we wrap the branches in the appropriate trampoline combinators and use `flatMap` to use the result of a recursive call.
 I'll explain the meaning of the combinators soon.
 
 # Stack-based trampolines
@@ -56,48 +61,52 @@ sealed class ConsList<out A> {
         Nil -> throw RuntimeException("unsafeTail: tail on empty list")
         is Cons -> tl
     }
+
+    val isEmpty get() = this is Cons
 }
 val nil = Nil
 infix fun <T>T.cons(l: ConsList<T>): ConsList<T> = Cons(this, l)
 ```
+This is just a standard persistent linked list and a helper "infix" function used to extend it at its head.
 
 A trampoline is built using three combinators:
+
 - `done` encodes a base case in the recursive computation.
 - `delay` encodes a recursive call that does not depend on any other recursive calls.
-   It delays the recursive call by placing it under a function with unit domain.
+   It delays the recursive call by placing it under a function with unit domain (that is, a function that just ignores its result, also called a *thunk* or a *suspension*).
 - `flatMap` lets you continue with the computation after the result of a recursive call.
 
-Perhaps you can spot that a trampoline forms a Monad!
+I've not written down the type signatures, but perhaps you can spot that a trampoline forms a Monad!
 It's not important but an interesting aside.
 
 We can encode these combinators in Kotlin as such:
 
 ```kotlin
 sealed class Trampoline<out T> {
-    private data class Done<out T>(val t: T) : Trampoline<T>()
+    private data class Done<out T>(val t: T) : Trampoline<T>() {}
 
-    // Delay is a specialization of FlatMap but improves performance.
+    // Delay is a specialization of FlatMap but improves performance
     private data class Delay<out T>(
       val suspension: () -> Trampoline<T>
     ) : Trampoline<T>()
 
     private data class FlatMap<T, out U>(
-      val suspension: Trampoline<T>,
+      val waitFor: Trampoline<T>,
       val cont: (T) -> Trampoline<U>
     ) : Trampoline<U>()
 
     fun <U> flatMap(to: (T) -> Trampoline<U>): Trampoline<U> = FlatMap(this, to)
 }
 fun <T> done(t: T): Trampoline<T> = Done(t)
-fun <T> delay(suspension: () -> Trampoline<T>): Trampoline<T> =
-        Delay(suspension) // alternatively just FlatMap(done(Unit), { suspension() })
+fun <T> delay(suspension: () -> Trampoline<T>): Trampoline<T> = Delay(suspension)
+// or just FlatMap(done(Unit), { suspension() })
 ```
 
 The `Suspend` constructor is not strictly necessary in terms of expressivity, since it can be encoded in terms of `FlatMap`.
 However, it does allow a significant performance improvement since we can avoid allocating a continuation on the stack.
 
 <aside class="notice">
-Aside: The constructors `Done` and `FlatMap` are actually the constructors of the free monad, here with the functor specialized to `() → A`.
+Aside: The astute reader may note that `Done` and `FlatMap` are actually the constructors of the free monad over the functor `F[A] = () → A`.
 </aside>
 
 Now we can define how to run a trampolined computation. This is the signature:
@@ -115,7 +124,7 @@ Now it is a simple matter of inspecting the current result `r`:
     Then set `stack` to be the rest.
   - Otherwise we are done and we return the result inside `r`.
 - If `r` is `Suspend` then we force the suspension and set `r` to be the resulting trampoline.
-- If `r` is `FlatMap` then we pop `r.cont` on the continuation stack and set `r = r.suspension`.
+- If `r` is `FlatMap` then we pop `r.cont` on the continuation stack and set `r = r.waitFor`.
 
 Here is the full Kotlin code:
 
@@ -137,7 +146,7 @@ fun <T> run(tramp: Trampoline<T>): T {
             }
             is FlatMap<*, *> -> {
                 stack = (r.cont as (Any) -> Trampoline<Any>) cons stack
-                r = r.suspension as Trampoline<Any>
+                r = r.waitFor as Trampoline<Any>
             }
         }
     }
@@ -163,3 +172,5 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [2]:https://blog.logrocket.com/using-trampolines-to-manage-large-recursive-loops-in-javascript-d8c9db095ae3
 [3]:https://www.datchley.name/recursion-tail-calls-and-trampolines/
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
+[^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
+[^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.

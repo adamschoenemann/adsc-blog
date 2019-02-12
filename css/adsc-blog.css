@@ -112,7 +112,7 @@ code {
 aside {
     padding: 5px;
     margin: 5px;
-    border: 2px solid #2E1322;
+    border: 2px solid rgb(20, 120, 100);
     display: inline-block;
     background-color: cadetblue;
 }
