@@ -4,9 +4,24 @@ title: Trampolines
 This post will *not* be about Haskell but rather focus on Kotlin.
 My dayjob is half Haskell half Kotlin (and a tiny bit of Typescript) so I frequently have to write Kotlin code.
 Kotlin is certainly no Haskell but it does adress *some* of the *worst* pain points of Java and lets you sort-of write code in a functional style.
-However, many problems are best solved using recursion and the JVM is just not very good at this since it quickly runs out of stack frames.
+Even if you're not familiar with Kotlin but with other "modern" programming languages you should be able to follow along here.
+I'll keep the code as simple and "obvious" as possible.
+You can find a [quick overview of the Kotlin syntax][5] here.
+
+Many algorithms are most naturally expressed using recursion, but the JVM is just not very good at this since it quickly runs out of stack frames.
 You can of course always increase the JVM stack size but this hampers the portability and safety of the code when deployed.
-Kotlin has primitive tail-recursion optimization but there is not always an easy way to express an algorithm with tail-recursion only.
+
+A special case of recursion is called **tail-recursion**.
+A tail-recursive function has recursive calls *only as the last operation before a return*.
+For (a contrived) example:
+
+```kotlin~
+fun countdown(n: Long): Long = if (n <= 0) then n else countdown(n-1)
+```
+
+Such functions can be optimized into an iterative style through *tail-recursion optimization*.
+You can probably imagine in your head how to rewrite `countdown` above using just a loop, and the same general transformation can be done by a compiler.
+In fact, Kotlin is capable of tail-recursion optimization but there is not always an easy way to express an algorithm with tail-recursion only.
 Instead, we can rewrite our recursive code using *trampolines*.
 [Wikipedia][1] has this to say about trampolines:
 
@@ -172,5 +187,6 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [2]:https://blog.logrocket.com/using-trampolines-to-manage-large-recursive-loops-in-javascript-d8c9db095ae3
 [3]:https://www.datchley.name/recursion-tail-calls-and-trampolines/
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
+[5]:https://kotlinlang.org/docs/reference/basic-syntax.html
 [^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
