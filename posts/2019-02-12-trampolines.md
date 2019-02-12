@@ -15,7 +15,7 @@ A special case of recursion is called **tail-recursion**.
 A tail-recursive function has recursive calls *only as the last operation before a return*.
 For (a contrived) example:
 
-```kotlin~
+```kotlin
 fun countdown(n: Long): Long = if (n <= 0) then n else countdown(n-1)
 ```
 
@@ -49,7 +49,7 @@ fun fact(n: Long) = tfactorial(n).run()
 
 If you're not familiar with Kotlin, the most foreign syntax for you is probably the anonymous (lambda) functions.
 The `fun () = ...` argument to `delay` introduces an anonymous function[^fn2] that doesn't depend on its arguments and computes `tfactorial(n - 1)` thus effectively delaying the execution of the recursive call to `tfactorial`.
-`fun (m) = done(m * n)` binds `m` to the result of recursive call on which we call `flatMap`.
+The expression `fun (m) = done(m * n)` binds `m` to the result of recursive call on which we call `flatMap`.
 
 Note that the structure of the code remains the same as in the un-trampolined version, but we wrap the branches in the appropriate trampoline combinators and use `flatMap` to use the result of a recursive call.
 I'll explain the meaning of the combinators soon.
@@ -188,5 +188,5 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [3]:https://www.datchley.name/recursion-tail-calls-and-trampolines/
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
 [5]:https://kotlinlang.org/docs/reference/basic-syntax.html
-[^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional reasons.
+[^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
