@@ -2,7 +2,7 @@
 title: Trampolines
 ---
 This post will *not* be about Haskell but rather focus on Kotlin.
-My dayjob is half Haskell half Kotlin (and a tiny bit of Typescript) so I frequently have to write Kotlin code.
+[My dayjob][9] is half Haskell half Kotlin (and a tiny bit of Typescript) so I frequently have to write Kotlin code.
 Kotlin is certainly no Haskell but it does adress *some* of the *worst* pain points of Java and lets you sort-of write code in a functional style.
 Even if you're not familiar with Kotlin but with other "modern" programming languages you should be able to follow along.
 Also, there is nothing specific to Kotlin in this post that you couldn't (with relative ease) implement in any other "modern" mainstream programming language.
@@ -97,7 +97,7 @@ A trampoline is built using three combinators:
    It delays the recursive call by placing it under a function with unit domain (that is, a function that just ignores its result, also called a *thunk* or a *suspension*).
 - `flatMap` lets you continue with the computation after the result of a recursive call.
 
-I've not written down the type signatures, but perhaps you can spot that a trampoline forms a Monad!
+I've not written down the type signatures, but perhaps you can spot that a trampoline forms a monad!
 It's not important but an interesting aside.
 
 We can encode these combinators in Kotlin as such:
@@ -177,24 +177,24 @@ fun <T> run(tramp: Trampoline<T>): T {
 Unfortunately we have to subvert Kotlin's type system in order to implement this, because it lacks heterogenous lists.
 It is perfectly safe though since a continuation will always be called with a result of the type it expects.
 
-To show it off on a slightly more complicated example, here is the fibonacci function:
+To show it off on a slightly more complicated example, here is the Fibonacci function:
 
 ```kotlin
-fun tfib(n: Long): Trampoline<Long> =
+fun fib(n: Long): Trampoline<Long> =
         if (n <= 1)
             done(n)
-        else delay { tfib(n - 1) }.flatMap { n1 ->
-            tfib(n - 2).flatMap { n2 -> done(n1 + n2) }
+        else delay { fib(n - 1) }.flatMap { n1 ->
+            fib(n - 2).flatMap { n2 -> done(n1 + n2) }
         }
 ```
 
 If we code-golf it a bit and add a few helper combinators we can also express it in an "applicative" style:
 
 ```kotlin
-fun tfib2(n: Long): Trampoline<Long> =
+fun fib2(n: Long): Trampoline<Long> =
         if (n <= 1)
             done(n)
-        else delay { tfib2(n - 1) }.zip(tfib2(n - 2)).map { (n1, n2) -> n1 + n2 }
+        else delay { fib2(n - 1) }.zip(fib2(n - 2)).map { (n1, n2) -> n1 + n2 }
 ```
 
 That's it!
@@ -224,5 +224,6 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [6]:https://stackoverflow.com/questions/33923/what-is-tail-recursion
 [7]:https://scalaz.github.io/scalaz/scalaz-2.9.1-6.0.4/doc.sxr/scalaz/Free.scala.html
 [8]:http://okmij.org/ftp/Haskell/zseq.pdf
+[9]:http://deondigital.com/
 [^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
