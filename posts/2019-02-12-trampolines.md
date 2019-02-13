@@ -4,7 +4,8 @@ title: Trampolines
 This post will *not* be about Haskell but rather focus on Kotlin.
 My dayjob is half Haskell half Kotlin (and a tiny bit of Typescript) so I frequently have to write Kotlin code.
 Kotlin is certainly no Haskell but it does adress *some* of the *worst* pain points of Java and lets you sort-of write code in a functional style.
-Even if you're not familiar with Kotlin but with other "modern" programming languages you should be able to follow along here.
+Even if you're not familiar with Kotlin but with other "modern" programming languages you should be able to follow along.
+Also, there is nothing specific to Kotlin in this post that you couldn't (with relative ease) implement in any other "modern" mainstream programming language.
 I'll keep the code as simple and "obvious" as possible.
 You can find a [quick overview of the Kotlin syntax][5] here.
 
@@ -126,7 +127,7 @@ The `Suspend` constructor is not strictly necessary in terms of expressivity, si
 However, it does allow a significant performance improvement since we can avoid allocating a continuation on the stack.
 
 <aside class="notice">
-Aside: The astute reader may note that `Done` and `FlatMap` are actually the constructors of the free monad over the functor `F[A] = () → A`.
+The astute reader may note that `Done` and `FlatMap` are actually the constructors of the free monad over the functor `F[A] = () → A`.
 </aside>
 
 Now we can define how to run a trampolined computation. This is the signature:
@@ -176,10 +177,37 @@ fun <T> run(tramp: Trampoline<T>): T {
 Unfortunately we have to subvert Kotlin's type system in order to implement this, because it lacks heterogenous lists.
 It is perfectly safe though since a continuation will always be called with a result of the type it expects.
 
+To show it off on a slightly more complicated example, here is the fibonacci function:
+
+```kotlin
+fun tfib(n: Long): Trampoline<Long> =
+        if (n <= 1)
+            done(n)
+        else delay { tfib(n - 1) }.flatMap { n1 ->
+            tfib(n - 2).flatMap { n2 -> done(n1 + n2) }
+        }
+```
+
+If we code-golf it a bit and add a few helper combinators we can also express it in an "applicative" style:
+
+```kotlin
+fun tfib2(n: Long): Trampoline<Long> =
+        if (n <= 1)
+            done(n)
+        else delay { tfib2(n - 1) }.zip(tfib2(n - 2)).map { (n1, n2) -> n1 + n2 }
+```
+
 That's it!
 Trampolined code does not run as fast as natively recursive code of course.
 `FlatMap` is the biggest sinner since it requires allocating a continuation on the (heap-allocated) stack.
-However, trampolined code is completely guarded against stack-overflow errors.
+While it may not be super performant, trampolined code is completely guarded against stack-overflow errors!
+If you can catch `StackOverFlowError`s (or their equivalent) in your language, you can even run an un-trampolined version first and then resort to the trampolined algorithm if you run out of stack space.
+
+There are other approaches to implementing trampolines.
+For example [Scalaz][7] directly composes trampolines when `flatMap`ing and PureScript uses a (much more complicated) technique described in [Reflection without Remorse][8].
+I can't speak to their performance characteristics compared to the approach I've delineated here, and I don't have the time for a proper comparison.
+They're probably faster but this approach wins on simplicity in my opinion.
+
 Converting normal recursive code to trampolined code is in general not difficiult:
 
 - base cases are wrapped in `done`.
@@ -194,5 +222,7 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [4]:http://raganwald.com/2013/03/28/trampolines-in-javascript.html
 [5]:https://kotlinlang.org/docs/reference/basic-syntax.html
 [6]:https://stackoverflow.com/questions/33923/what-is-tail-recursion
+[7]:https://scalaz.github.io/scalaz/scalaz-2.9.1-6.0.4/doc.sxr/scalaz/Free.scala.html
+[8]:http://okmij.org/ftp/Haskell/zseq.pdf
 [^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
