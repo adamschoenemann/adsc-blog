@@ -123,7 +123,7 @@ fun <T> delay(suspension: () -> Trampoline<T>): Trampoline<T> = Delay(suspension
 // or just FlatMap(done(Unit), { suspension() })
 ```
 
-The `Suspend` constructor is not strictly necessary in terms of expressivity, since it can be encoded in terms of `FlatMap`.
+The `Delay` constructor is not strictly necessary in terms of expressivity, since it can be encoded in terms of `FlatMap`.
 However, it does allow a significant performance improvement since we can avoid allocating a continuation on the stack.
 
 <aside class="notice">
@@ -144,7 +144,7 @@ Now it is a simple matter of inspecting the current result `r`:
   - If there are continuations in `stack` then pop the first one and call it with `r.t`.
     Then set `stack` to be the rest.
   - Otherwise we are done and we return the result inside `r`.
-- If `r` is `Suspend` then we force the suspension and set `r` to be the resulting trampoline.
+- If `r` is `Delay` then we force the suspension and set `r` to be the resulting trampoline.
 - If `r` is `FlatMap` then we pop `r.cont` on the continuation stack and set `r = r.waitFor`.
 
 Here is the full Kotlin code:
@@ -183,12 +183,12 @@ To show it off on a slightly more complicated example, here is the Fibonacci fun
 fun fib(n: Long): Trampoline<Long> =
         if (n <= 1)
             done(n)
-        else delay { fib(n - 1) }.flatMap { n1 ->
-            fib(n - 2).flatMap { n2 -> done(n1 + n2) }
-        }
+        else delay (fun () = fib(n - 1)).flatMap (fun (n1) =
+            fib(n - 2).flatMap(fun (n2) = done(n1 + n2))
+        )
 ```
 
-If we code-golf it a bit and add a few helper combinators we can also express it in an "applicative" style:
+If we code-golf it a bit, use Kotlins [lambda notation][10] and add a few helper combinators we can also express it in an "applicative" style:
 
 ```kotlin
 fun fib2(n: Long): Trampoline<Long> =
@@ -225,5 +225,6 @@ As such, we can write our recursive algorithms and then later mechanically tramp
 [7]:https://scalaz.github.io/scalaz/scalaz-2.9.1-6.0.4/doc.sxr/scalaz/Free.scala.html
 [8]:http://okmij.org/ftp/Haskell/zseq.pdf
 [9]:http://deondigital.com/
+[10]:https://kotlinlang.org/docs/reference/lambdas.html
 [^fn1]: Of course, the factorial function can be implemented simply and effectively with both loops and tail-recursion but we'll use its recursive formulation here for expositional purposes.
 [^fn2]: Kotlin has some much more ergonomic syntax for lambda functions but I felt this was clearer in case the reader is not familiar with Kotlin.
