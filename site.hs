@@ -8,19 +8,12 @@ import           Text.Pandoc.Options
 
 --------------------------------------------------------------------------------
 
--- | Not used by an example of how to customize the compiler
+-- | Pandoc compiler with mathjax
 customPandocCompiler :: Compiler (Item String)
 customPandocCompiler =
     let readerOptions = defaultHakyllReaderOptions
         writerOptions = defaultHakyllWriterOptions { writerHTMLMathMethod = MathJax "" }
     in  pandocCompilerWith readerOptions writerOptions
-    -- let 
-    --     defaultExtensions = readerExtensions defaultHakyllReaderOptions
-    --     newExtensions = enableExtension Ext_literate_haskell defaultExtensions 
-    --     readerOptions = defaultHakyllReaderOptions {
-    --                       readerExtensions = newExtensions
-    --                     }
-    -- in pandocCompilerWith readerOptions defaultHakyllWriterOptions 
 
 myFeedConfiguration :: FeedConfiguration
 myFeedConfiguration = FeedConfiguration
@@ -30,7 +23,7 @@ myFeedConfiguration = FeedConfiguration
     , feedAuthorEmail = "adamschoenemann@gmail.com"
     , feedRoot = "http://adamschoenemann.dk"
     }
-    
+
 
 main :: IO ()
 main = hakyll $ do
@@ -50,6 +43,14 @@ main = hakyll $ do
         route   $ setExtension "html"
         compile $ pandocCompiler
             >>= loadAndApplyTemplate "templates/default.html" defaultContext
+            >>= relativizeUrls
+
+    match "drafts/*" $ do
+        route $ setExtension "html"
+        compile $ customPandocCompiler
+            >>= loadAndApplyTemplate "templates/post.html"    postCtx
+            >>= saveSnapshot "content"
+            >>= loadAndApplyTemplate "templates/default.html" postCtx
             >>= relativizeUrls
 
     match "posts/*" $ do
@@ -73,11 +74,11 @@ main = hakyll $ do
                 >>= loadAndApplyTemplate "templates/blog.html" archiveCtx
                 >>= loadAndApplyTemplate "templates/default.html" archiveCtx
                 >>= relativizeUrls
-    
+
     create ["rss.xml"] $ do
         route idRoute
         compile $ do
-            let feedCtx = postCtx `mappend` bodyField "description" 
+            let feedCtx = postCtx `mappend` bodyField "description"
             posts <- fmap (take 10) . recentFirst =<< loadAllSnapshots "posts/*" "content"
             renderRss myFeedConfiguration feedCtx posts
 
