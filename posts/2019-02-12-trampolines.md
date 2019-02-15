@@ -57,8 +57,27 @@ If you're not familiar with Kotlin, the most foreign syntax for you is probably 
 The `fun () = ...` argument to `delay` introduces an anonymous function[^fn2] that doesn't depend on its arguments and computes `tfactorial(n - 1)` thus effectively delaying the execution of the recursive call to `tfactorial`.
 The expression `fun (m) = done(m * n)` binds `m` to the result of recursive call on which we call `flatMap`.
 
+I'll explain the meaning of the combinators soon, so don't be scared if it is non-obvious!
 Note that the structure of the code remains the same as in the un-trampolined version, but we wrap the branches in the appropriate trampoline combinators and use `flatMap` to use the result of a recursive call.
-I'll explain the meaning of the combinators soon.
+
+The examples we've seen so far are rather easy to rewrite in an iterative style.
+A slightly more involved example is the (inorder) `map` function defined on (unlabeled) binary trees:
+
+```kotlin
+fun <A, B> map(tree: Tree<A>, f: (A) -> B): Tree<B>  = when (tree) {
+    is Tree.Leaf -> Tree.Leaf(f(tree.item))
+    is Tree.Node -> {
+        val left = map(tree.left, f)
+        val right = map(tree.right, f)
+        Tree.Node(left, right)
+    }
+}
+```
+
+Implementing this without recursion is a bit more difficult.
+Once you get the trick it's not too complicated but essentially you'll have invented a specialized version of a trampoline!
+The iterative version also lacks the declarative nature of the recursive formulation.
+With trampolines we can retain the recursive structure of the algorithm while avoiding overflowing the stack.
 
 # Stack-based trampolines
 The principle of a trampoline is that instead of expressing the recursion directly in Kotlin we instead build up a data structure that encodes the recursion.
